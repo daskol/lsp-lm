@@ -133,3 +133,9 @@ dmypy.json
 
 # Ignore archive files
 /data/*.zip
+
+# Ignore Jupyter notebooks
+/notebooks/*.ipynb
+
+# Ignore Jupyter checkpints
+.ipynb_checkpoints
