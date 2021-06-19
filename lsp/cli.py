@@ -9,6 +9,8 @@ from os import getppid
 from socket import AF_INET, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, socket
 from string import ascii_letters
 
+from .completion import Completor
+from .corpus import Corpus
 from .lsp import Dispatcher, ErrorCode, LSPError, Router
 from .rpc import make_transport_pair
 from .version import version
@@ -64,10 +66,21 @@ class TextDocument:
     @staticmethod
     def did_open(params):
         logging.info('handle did_open() notification')
+        corpus.open(params['textDocument']['uri'],
+                    params['textDocument']['text'])
 
     @staticmethod
     def did_change(params):
         logging.info('handle did_change() notification')
+        uri = params['textDocument']['uri']
+        ver = params['textDocument']['version']
+        changes = params['contentChanges']
+        logging.info('apply %d changes to %s:%d', len(changes), uri, ver)
+        for change in changes:
+            if change.get('range'):
+                logging.warning('lsp does not support incremental changes')
+            else:
+                corpus.set(uri, change['text'])
 
     @staticmethod
     def did_close(params):
@@ -75,18 +88,17 @@ class TextDocument:
 
     def completion(params):
         logging.info('handle completion() procedure call')
-        return [
-            {'label': 'he'},
-            {'label': 'hello'},
-            {'label': 'world'},
-            {'label': 'London'},
-            {'label': 'is'},
-            {'label': 'the'},
-            {'label': 'capital'},
-            {'label': 'of'},
-            {'label': 'Great'},
-            {'label': 'Britain'},
-        ]
+        uri = params['textDocument']['uri']
+        line = params['position']['line']
+        char = params['position']['character']
+
+        logging.info('complete at %d:%d for document %s', line, char, uri)
+        doc = corpus.get(uri)
+        labels = []
+        for item in completor.complete(doc, line, char):
+            labels.append({'label': item})
+
+        return labels
 
 
 def parse_mediatype(value: str):
@@ -134,7 +146,7 @@ def serve_client(conn: socket, addr: str):
             res = router.handle(obj)
             if res is None:
                 continue
-            logging.info('write back response or error')
+            logging.info('write back response (or error)')
             content = dumps(res, ensure_ascii=False, indent=2)
             print(content)
             writer.write(content.encode(charset))
@@ -174,9 +186,30 @@ def connect(addr: str):
 
 
 @main.command()
+@click.option('-M', '--model', type=click.Path(exists=True, file_okay=False))
+@click.option('-V', '--vocab', type=click.Path(exists=True, dir_okay=False))
+@click.option('-c', '--context-size', default=3, type=int)
 @click.option('-h', '--host', default='127.0.0.1')
+@click.option('-n', '--num-sudgests', default=10, type=int)
 @click.option('-p', '--port', default=8080)
-def serve(host: str, port: int):
+def serve(model: str, vocab: str, context_size: int, num_sudgests: int,
+          host: str, port: int):
+    """Run lanuage server.
+    """
+    global corpus, completor
+
+    logging.info('instantiate corpus manager')
+    corpus = Corpus()
+
+    logging.info('instantiate completion provder')
+    completor = Completor.load(
+        vocab_path=vocab,
+        model_path=model,
+        context_size=context_size,
+        nosudgests=num_sudgests,
+    )
+
+    logging.info('serve client connections')
     with socket(AF_INET, SOCK_STREAM) as sock:
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sock.bind((host, port))
