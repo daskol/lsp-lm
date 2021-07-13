@@ -11,9 +11,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from json import loads, dumps
-from os import getppid
+from os import getppid, unlink
 from pathlib import Path
-from socket import AF_INET, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, socket
+from socket import AF_INET, AF_UNIX, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, \
+    socket
 from ssl import SSLContext
 from string import ascii_letters
 from sys import stderr
@@ -370,12 +371,27 @@ class Server:
         elif self.addr.proto in (Proto.TCP, Proto.TCP4, Proto.TCP6):
             self._accept_tcp_connections(self.addr)
         elif self.addr.proto == Proto.UNIX:
-            logging.error('serving with unix sockets is not implemented yet')
+            self._accept_ipc_connections(self.addr)
 
     def stop(self, timeout=None):
         """Method stop does gracefull shutdown of server.
         """
         raise NotImplementedError
+
+    def _accept_ipc_connections(self, addr: Addr):
+        with socket(AF_UNIX, SOCK_STREAM) as sock:
+            sock.bind(addr.path)
+            sock.listen(1)
+
+            unlink(addr.path)
+
+            while True:
+                conn, _ = sock.accept()
+
+                # Handle connection in a separate thread in thread pool. Also,
+                # set up finalizer to remove connection fron an index.
+                future = self.pool.submit(self._open_ipc_connection, conn)
+                future.add_done_callback(self._close_ipc_connection)
 
     def _accept_tcp_connections(self, addr: Addr):
         with socket(AF_INET, SOCK_STREAM) as sock:
@@ -393,10 +409,29 @@ class Server:
                 future = self.pool.submit(self._open_tcp_connection, *conn)
                 future.add_done_callback(self._close_tcp_connection)
 
-    def _close_tcp_connection(self, future: Future):
+    def _close_connection(self, future: Future):
         # TODO: Remove from session index.
         if (exc := future.exception()):
             logging.error('connection handler raise an exception: %s', exc)
+
+    def _close_ipc_connection(self, future: Future):
+        self._close_connection(future)
+
+    def _close_tcp_connection(self, future: Future):
+        self._close_connection(future)
+
+    def _open_ipc_connection(self, sock: socket):
+        logging.info('accept ipc connection')
+        try:
+            with sock:
+                fileobj = sock.makefile('rwb')
+                session = Session(fileobj, fileobj, self, self.protocol)
+                self.sessions.append(session)
+                session.start()
+        except Exception:
+            logging.exception('loose ipc connection')
+        else:
+            logging.info('close connection')
 
     def _open_tcp_connection(self, sock: socket, addr: Tuple[str, int]):
         logging.info('accept connection from %s:%d', *addr)
