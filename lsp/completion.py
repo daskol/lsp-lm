@@ -6,6 +6,7 @@ import re
 import numpy as np
 import tensorflow as tf
 
+from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization  # noqa
@@ -37,7 +38,26 @@ def locate(text: str, line: int, char: int) -> Optional[int]:
     return pos
 
 
-class Completor:
+class AbstractCompletor(ABC):
+    """Class AbstractCompletor defines interface for any comletion model used
+    in LSP implementation.
+    """
+
+    @abstractmethod
+    def complete(self, doc: Document, line: int, char: int) -> List[str]:
+        pass
+
+
+class VocabCompletor(AbstractCompletor):
+
+    def __init__(self, vocab: Optional[List[str]] = None):
+        self.vocab = vocab or []
+
+    def complete(self, doc: Document, line: int, char: int) -> List[str]:
+        return self.vocab
+
+
+class Completor(AbstractCompletor):
 
     PATTERN_CLEAN = re.compile(r'[^A-Za-z \n\t]')
 
@@ -104,6 +124,15 @@ class Completor:
         return Completor(tv, model, **kwargs)
 
 
+def get_completor(*args, **kwargs) -> AbstractCompletor:
+    """Function get_completor implements factory patter for constuction a
+    suitable completor instance.
+    """
+    return VocabCompletor(*args, **kwargs)
+
+
 __all__ = (
+    AbstractCompletor,
     Completor,
+    VocabCompletor,
 )
