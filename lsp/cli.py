@@ -17,7 +17,7 @@ from socket import AF_INET, AF_UNIX, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, \
     socket
 from ssl import SSLContext
 from string import ascii_letters
-from sys import stderr
+from sys import stderr, stdin, stdout
 from typing import Dict, List, Optional, Tuple
 from typing.io import IO
 from urllib.parse import parse_qs, urlparse
@@ -367,7 +367,7 @@ class Server:
         logging.info('serve client on %s', self.addr)
 
         if self.addr.proto == Proto.STDIO:
-            logging.error('serving with stdio/stdout is not implemented yet')
+            self._accept_std_connections()
         elif self.addr.proto in (Proto.TCP, Proto.TCP4, Proto.TCP6):
             self._accept_tcp_connections(self.addr)
         elif self.addr.proto == Proto.UNIX:
@@ -392,6 +392,19 @@ class Server:
                 # set up finalizer to remove connection fron an index.
                 future = self.pool.submit(self._open_ipc_connection, conn)
                 future.add_done_callback(self._close_ipc_connection)
+
+    def _accept_std_connections(self):
+        logging.info('accept stdio connection')
+        try:
+            sin = stdin.buffer
+            sout = stdout.buffer
+            session = Session(sin, sout, self, self.protocol)
+            self.sessions.append(session)
+            session.start()
+        except Exception:
+            logging.exception('loose stdio connection')
+        else:
+            logging.info('close stdio connection')
 
     def _accept_tcp_connections(self, addr: Addr):
         with socket(AF_INET, SOCK_STREAM) as sock:
