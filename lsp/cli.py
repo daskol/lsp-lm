@@ -14,6 +14,7 @@ from json import loads, dumps
 from os import getppid
 from pathlib import Path
 from socket import AF_INET, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, socket
+from ssl import SSLContext
 from string import ascii_letters
 from sys import stderr
 from typing import Dict, List, Optional, Tuple
@@ -52,6 +53,11 @@ def parse_mediatype(value: str):
             charset = 'utf-8'
 
     return mediatype, charset
+
+
+def read_password(path: Path) -> str:
+    with open(path) as fin:
+        return fin.read().strip()
 
 
 class Proto(Enum):
@@ -346,11 +352,12 @@ class Server:
                      (aka connection).
     """
 
-    def __init__(self, addr: Addr, protocol):
+    def __init__(self, addr: Addr, protocol, tls_context=None):
         self.addr = addr
         self.protocol = protocol
         self.pool = ThreadPoolExecutor(4, '[lsp]')
         self.sessions = []
+        self.tls_context = tls_context
 
     def start(self):
         """Method start runs server in blocking way. In order to stop serving
@@ -376,18 +383,33 @@ class Server:
             sock.bind((addr.host, addr.port))
             sock.listen(1)
 
-            # TODO: Accept incomming connections forever and handle each one in
-            # a separate thread.
+            # Accept incomming connections forever and handle each one in a
+            # separate thread.
             while True:
                 conn = sock.accept()
-                future = self.pool.submit(self._handle_tcp_connection, *conn)
-                future.add_done_callback(self._handle_tcp_connection_close)
 
-    def _handle_tcp_connection(self, sock: socket, addr: Tuple[str, int]):
+                # Handle connection in a separate thread in thread pool. Also,
+                # set up finalizer to remove connection fron an index.
+                future = self.pool.submit(self._open_tcp_connection, *conn)
+                future.add_done_callback(self._close_tcp_connection)
+
+    def _close_tcp_connection(self, future: Future):
+        # TODO: Remove from session index.
+        if (exc := future.exception()):
+            logging.error('connection handler raise an exception: %s', exc)
+
+    def _open_tcp_connection(self, sock: socket, addr: Tuple[str, int]):
         logging.info('accept connection from %s:%d', *addr)
         try:
-            with sock:
-                fileobj = sock.makefile('rwb')
+            # If there is a SSL context than we should wrap socket in the
+            # SSL context.
+            if self.tls_context:
+                conn = self.tls_context.wrap_socket(sock, True)
+            else:
+                conn = sock
+
+            with conn:
+                fileobj = conn.makefile('rwb')
                 session = Session(fileobj, fileobj, self, self.protocol)
                 self.sessions.append(session)
                 session.start()
@@ -395,11 +417,6 @@ class Server:
             logging.exception('loose connection from %s:%d', *addr)
         else:
             logging.info('close connection from %s:%d', *addr)
-
-    def _handle_tcp_connection_close(self, future: Future):
-        # TODO: Remove from session index.
-        if (exc := future.exception()):
-            logging.error('connection handler raise an exception: %s', exc)
 
 
 def connect(addr: Addr):
@@ -424,14 +441,26 @@ def connect(addr: Addr):
 
 
 def serve(model: Path, vocab: Path, context_size: int, num_results: int,
-          addr: Addr, host: str, port: int):
+          addr: Addr, host: str, port: int,
+          tls_cert: Optional[Path], tls_key: Optional[Path],
+          tls_pass: Optional[Path]):
+    # Create TLS context if posssible.
+    if tls_cert is None:
+        tls_context = None
+    else:
+        logging.info('create TLS context from %s', tls_cert)
+        tls_context = SSLContext()
+        tls_context.load_cert_chain(certfile=tls_cert,
+                                    keyfile=tls_key,
+                                    password=lambda: read_password(tls_pass))
+
     addr.update(host=host, port=port)
 
     # TODO: Collect all options to a container and construct closed factory for
     # serving.
     protocol = Protocol
 
-    server = Server(addr, protocol)
+    server = Server(addr, protocol, tls_context)
     server.start()
 
 
@@ -497,6 +526,9 @@ parser_serve.add_argument('-c', '--context-size', default=3, type=int, help='Siz
 parser_serve.add_argument('-n', '--num-results', default=10, type=int, help='Number of completion items in response.')  # noqa: E501
 parser_serve.add_argument('-M', '--model', type=PathType(True, not_file=True), help='Path to model file or directory.')  # noqa: E501
 parser_serve.add_argument('-V', '--vocab', type=PathType(True, not_dir=True), help='Path to vocabulary file.')  # noqa: E501
+parser_serve.add_argument('--tls-cert', type=PathType(True, not_dir=True), help='Path to TLS certificate.')  # noqa: E501
+parser_serve.add_argument('--tls-key', type=PathType(True, not_dir=True), help='Path to private key.')  # noqa: E501
+parser_serve.add_argument('--tls-pass', type=PathType(True, not_dir=True), help='Path to password to decrypt private key.')  # noqa: E501
 
 parser_version = subparsers.add_parser('version', add_help=False, help='Show version information.')  # noqa: E501
 parser_version.set_defaults(func=version_)
