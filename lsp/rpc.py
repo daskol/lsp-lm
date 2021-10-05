@@ -7,8 +7,7 @@
 # TODO: Parse content type "in-place".
 
 from dataclasses import dataclass
-from typing import Optional
-from typing.io import IO
+from typing import IO, Optional
 
 
 class PacketError(Exception):
@@ -55,8 +54,10 @@ class PacketReader:
             return self.req
         except StopIteration:
             self.stop = True
+            return None
         except PacketError as e:
             self.err = e
+            return None
 
     def _read_content(self):
         if self.req.content_length == 0:
@@ -121,8 +122,8 @@ class PacketWriter:
 
 
 __all__ = (
-    Packet,
-    PacketError,
-    PacketReader,
-    PacketWriter,
+    'Packet',
+    'PacketError',
+    'PacketReader',
+    'PacketWriter',
 )

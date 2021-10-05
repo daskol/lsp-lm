@@ -12,8 +12,7 @@ from inspect import ismethod, getmembers, getmro
 from itertools import count
 from json import dumps
 from os.path import join
-from typing import Any, Callable, Dict, Optional, Union
-from typing.io import IO
+from typing import Any, Callable, Dict, IO, Optional, Type, Union
 
 from .rpc import PacketReader, PacketWriter
 
@@ -46,7 +45,7 @@ def to_camel_case(name: str) -> str:
     return result
 
 
-def protocol(cls_or_scope: Union['Base', str], suffix: str = 'Protocol'):
+def protocol(cls_or_scope: Union[Type['Base'], str], suffix: str = 'Protocol'):
     """Class decorator protocol is aimed to collect and populate functions
     which are suppose to handle requests and notifications from a side. It puts
     all methods to the same root (or scope) if no root was specified.
@@ -56,7 +55,9 @@ def protocol(cls_or_scope: Union['Base', str], suffix: str = 'Protocol'):
     ...     pass
     """
     # Switch between simple decorator and parametrized decorator.
-    if type(cls_or_scope) != str:
+    cls: Optional[Type[Base]]
+    scope: Optional[str]
+    if isinstance(cls_or_scope, type) and issubclass(cls_or_scope, Base):
         cls, scope = cls_or_scope, None
     else:
         cls, scope = None, cls_or_scope
@@ -99,6 +100,8 @@ def handler(func_or_name: HandlerOrString,
     ...     pass
     """
     # Switch between simple and parametrized decorator.
+    func: Optional[Callable[..., Any]]
+    name: Optional[str]
     if callable(func_or_name):
         func, name = func_or_name, None
     else:
@@ -220,7 +223,7 @@ class DiagnosticsProtocol(Base):
 
 
 @protocol
-class TelemetryProtocol:
+class TelemetryProtocol(Base):
 
     @notification
     def event(self, **kwargs):
@@ -228,7 +231,7 @@ class TelemetryProtocol:
 
 
 @protocol
-class TextDocumentProtocol:
+class TextDocumentProtocol(Base):
 
     @request
     def completion(self, *args, **kwargs):
@@ -473,13 +476,13 @@ class Dispatcher:
 
 
 __all__ = (
-    Base,
-    Dispatcher,
-    ErrorCode,
-    LSPError,
-    LanguageServerProtocol,
-    Router,
-    notification,
-    protocol,
-    request,
+    'Base',
+    'Dispatcher',
+    'ErrorCode',
+    'LSPError',
+    'LanguageServerProtocol',
+    'Router',
+    'notification',
+    'protocol',
+    'request',
 )

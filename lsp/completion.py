@@ -87,7 +87,7 @@ class Completor(AbstractCompletor):
         for i, index in enumerate(indexes[0, ::-1]):
             sudgest[i] = self.vocab[index]
 
-        return sudgest
+        return sudgest.tolist()
 
     def get_phrase(self, text: str, end: int, length: int) -> str:
         # Estimate the beginning of a phrase with requiested number of words.
@@ -132,7 +132,7 @@ def get_completor(*args, **kwargs) -> AbstractCompletor:
 
 
 __all__ = (
-    AbstractCompletor,
-    Completor,
-    VocabCompletor,
+    'AbstractCompletor',
+    'Completor',
+    'VocabCompletor',
 )

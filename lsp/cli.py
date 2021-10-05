@@ -18,8 +18,7 @@ from socket import AF_INET, AF_UNIX, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, \
 from ssl import SSLContext
 from string import ascii_letters
 from sys import stderr, stdin, stdout
-from typing import Dict, List, Optional, Tuple
-from typing.io import IO
+from typing import Dict, IO, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from .completion import get_completor
@@ -61,6 +60,13 @@ def read_password(path: Path) -> str:
         return fin.read().strip()
 
 
+def make_password_reader(path: Optional[Path]):
+    if path is None:
+        return None
+    else:
+        return lambda: read_password(path)
+
+
 class Proto(Enum):
 
     STDIO = 'stdio'
@@ -72,6 +78,9 @@ class Proto(Enum):
     TCP6 = 'tcp6'
 
     UNIX = 'unix'
+
+    def __str__(self):
+        return self.name.lower()
 
 
 @dataclass
@@ -357,7 +366,7 @@ class Server:
         self.addr = addr
         self.protocol = protocol
         self.pool = ThreadPoolExecutor(4, '[lsp]')
-        self.sessions = []
+        self.sessions: List[Session] = []
         self.tls_context = tls_context
 
     def start(self):
@@ -379,11 +388,14 @@ class Server:
         raise NotImplementedError
 
     def _accept_ipc_connections(self, addr: Addr):
+        if (path := addr.path) is None:
+            raise ValueError('Unix socket address should be specified.')
+
         with socket(AF_UNIX, SOCK_STREAM) as sock:
-            sock.bind(addr.path)
+            sock.bind(path)
             sock.listen(1)
 
-            unlink(addr.path)
+            unlink(path)
 
             while True:
                 conn, _ = sock.accept()
@@ -500,7 +512,7 @@ def serve(model: Path, vocab: Path, context_size: int, num_results: int,
         tls_context = SSLContext()
         tls_context.load_cert_chain(certfile=tls_cert,
                                     keyfile=tls_key,
-                                    password=lambda: read_password(tls_pass))
+                                    password=make_password_reader(tls_pass))
 
     addr.update(host=host, port=port)
 
@@ -549,7 +561,7 @@ def main():
 
 # Parser for connectivity options.
 parser_opt_connection = ArgumentParser(add_help=False)
-parser_opt_connection.add_argument('-P', '--protocol', default=Proto.TCP, type=Proto, choices=sorted(x.value for x in Proto), help='Communication protocol to use.')  # noqa: E501
+parser_opt_connection.add_argument('-P', '--protocol', default=Proto.TCP, type=Proto, choices=Proto, help='Communication protocol to use.')  # noqa: E501
 parser_opt_connection.add_argument('-H', '--host', type=str, help='Address to listen.')  # noqa: E501
 parser_opt_connection.add_argument('-p', '--port', type=int, help='Port to listen.')  # noqa: E501
 parser_opt_connection.add_argument('addr', default=Addr(Proto.STDIO), nargs='?', type=AddrType(), help='LSP address as URI to communicate (valid schemes are tcp[46] and unix).')  # noqa: E501
@@ -582,5 +594,5 @@ parser_version = subparsers.add_parser('version', add_help=False, help='Show ver
 parser_version.set_defaults(func=version_)
 
 __all__ = (
-    main,
+    'main',
 )
