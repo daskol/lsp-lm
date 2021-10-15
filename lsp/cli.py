@@ -15,8 +15,7 @@ from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 from .app import Protocol
-from .lsp import Dispatcher
-from .session import Addr, Proto, Server
+from .syncio import Addr, Dispatcher, Proto, Server
 from .version import version
 
 

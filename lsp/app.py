@@ -8,7 +8,7 @@ from string import ascii_letters
 
 from .completion import get_completor
 from .corpus import Corpus
-from .lsp import ErrorCode, LanguageServerProtocol, LSPError
+from .syncio.lsp import ErrorCode, LanguageServerProtocol, LSPError
 from .version import version
 
 
