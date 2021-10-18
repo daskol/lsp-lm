@@ -6,7 +6,6 @@
 import logging
 
 from dataclasses import dataclass
-from enum import IntEnum
 from functools import wraps
 from inspect import ismethod, getmembers, getmro
 from itertools import count
@@ -15,6 +14,17 @@ from os.path import join
 from typing import Any, Callable, Dict, IO, Optional, Type, Union
 
 from .rpc import PacketReader, PacketWriter
+
+
+__all__ = (
+    'Base',
+    'Dispatcher',
+    'LanguageServerProtocol',
+    'Router',
+    'notification',
+    'protocol',
+    'request',
+)
 
 
 HandlerOrString = Union[Callable[..., Any], Optional[str]]
@@ -358,44 +368,6 @@ class LanguageServerProtocol(GeneralProtocol,
     """
 
 
-class ErrorCode(IntEnum):
-
-    # JSON RPC specific error codes.
-
-    ParseError = -32700
-
-    InvalidRequest = -32600
-
-    MethodNotFound = -32601
-
-    InvalidParams = -32602
-
-    InternalError = -32603
-
-    # JSON RPC specific (backward compatible) error codes.
-
-    ServerErrorStart = -32099
-
-    ServerNotInitialized = -32002
-
-    UnknownErrorCode = -32001
-
-    # LSP specific error codes.
-
-    ServerCancelled = -32802
-
-    ContentModified = -32801
-
-    RequestCancelled = -32800
-
-
-class LSPError(Exception):
-
-    def __init__(self, code: ErrorCode, desc: Optional[str] = None):
-        self.code = code
-        self.desc = desc
-
-
 @dataclass
 class Route:
 
@@ -473,16 +445,3 @@ class Dispatcher:
         body = json.encode('utf8')
 
         self.writer.write(body)
-
-
-__all__ = (
-    'Base',
-    'Dispatcher',
-    'ErrorCode',
-    'LSPError',
-    'LanguageServerProtocol',
-    'Router',
-    'notification',
-    'protocol',
-    'request',
-)

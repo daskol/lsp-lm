@@ -4,17 +4,16 @@
 import logging
 
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
-from enum import Enum
 from json import dumps, loads
 from os import unlink
 from socket import AF_INET, AF_UNIX, SOCK_STREAM, SO_REUSEADDR, SOL_SOCKET, \
     socket
 from sys import stdin, stdout
-from typing import Dict, IO, List, Optional, Tuple
+from typing import IO, List, Tuple
 
 from .lsp import Router
 from .rpc import PacketReader, PacketWriter
+from ..types import Addr, Proto
 
 
 def parse_mediatype(value: str):
@@ -33,55 +32,6 @@ def parse_mediatype(value: str):
             charset = 'utf-8'
 
     return mediatype, charset
-
-
-class Proto(Enum):
-
-    STDIO = 'stdio'
-
-    TCP = 'tcp'
-
-    TCP4 = 'tcp4'
-
-    TCP6 = 'tcp6'
-
-    UNIX = 'unix'
-
-    def __str__(self):
-        return self.name.lower()
-
-
-@dataclass
-class Addr:
-
-    proto: Proto
-
-    host: Optional[str] = None
-
-    port: Optional[int] = None
-
-    path: Optional[str] = None
-
-    opts: Dict[str, List[str]] = field(default_factory=dict)
-
-    def update(self, *, host: Optional[str] = None,
-               port: Optional[int] = None, path: Optional[str] = None):
-        if host:
-            self.host = host
-        if port:
-            self.port = port
-        if path:
-            self.path = path
-
-    def __str__(self) -> str:
-        if self.proto == Proto.STDIO:
-            return f'{self.proto.value}:'
-        elif self.proto in (Proto.TCP, Proto.TCP4, Proto.TCP6):
-            return f'{self.proto.value}://{self.host}:{self.port}'
-        elif self.proto == Proto.UNIX:
-            return f'{self.proto.value}://{self.path}'
-        else:
-            raise RuntimeError('Unexpected execution path.')
 
 
 class Session:

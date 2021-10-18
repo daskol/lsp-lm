@@ -8,8 +8,8 @@ from string import ascii_letters
 
 from .completion import AbstractCompletor, make_completor_loader
 from .corpus import Corpus
-from .syncio import Addr, Proto, Server
-from .syncio.lsp import ErrorCode, LanguageServerProtocol, LSPError
+from .lsp import Addr, ErrorCode, LSPError
+from .lsp.syncio import LanguageServerProtocol, Server
 from .version import version
 
 
@@ -124,7 +124,7 @@ class Application:
     ownership tree for any runtime resource.
     """
 
-    def __init__(self, addr, tls_context, ir_opts, lm_opts):
+    def __init__(self, addr: Addr, tls_context, ir_opts, lm_opts):
         self.ir_opts = ir_opts
         self.lm_opts = lm_opts
         self.loader = make_completor_loader(self.lm_opts)

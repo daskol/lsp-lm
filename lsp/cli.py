@@ -14,7 +14,8 @@ from sys import stderr
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
-from .syncio import Addr, Dispatcher, Proto
+from .lsp import Addr, Proto
+from .lsp.syncio import Dispatcher
 from .version import version
 
 
