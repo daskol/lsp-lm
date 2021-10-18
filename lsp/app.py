@@ -6,21 +6,29 @@ import logging
 from os import getppid
 from string import ascii_letters
 
-from .completion import get_completor
+from .completion import AbstractCompletor, make_completor_loader
 from .corpus import Corpus
+from .syncio import Addr, Proto, Server
 from .syncio.lsp import ErrorCode, LanguageServerProtocol, LSPError
 from .version import version
 
 
 __all__ = (
-    'Protocol',
+    'Application',
 )
 
 
-class Protocol(LanguageServerProtocol):
+class CompletionProtocol(LanguageServerProtocol):
+    """Class CompletionProtocol implements minimal values part of LSP to
+    provide completion. It loads models and initialises document manager on
+    initialize() request and maintains its internal state.
+    """
 
-    def __init__(self, session):
+    def __init__(self, completor_loader, session):
         super().__init__()
+
+        self.completor: AbstractCompletor
+        self.completor_loader = completor_loader
         self.session = session
 
     def watch_pid(self, pid: int):
@@ -33,9 +41,11 @@ class Protocol(LanguageServerProtocol):
         self.corpus = Corpus()
 
         logging.info('instantiate completor')
-        with open('vocab.txt') as fin:
-            vocab = fin.read().splitlines()[:10]
-        self.completor = get_completor(vocab)
+        try:
+            self.completor = self.completor_loader.load()
+        except Exception:
+            logging.exception('failed to load completor')
+            raise LSPError(ErrorCode.InternalError, 'completor loading error')
 
         pid = params.get('processId')
         if pid and not isinstance(pid, int):
@@ -107,3 +117,21 @@ class Protocol(LanguageServerProtocol):
 
     def did_save(self, params):
         logging.info('handle did_save() notification')
+
+
+class Application:
+    """Class Application is a high-level entry point which is the root of
+    ownership tree for any runtime resource.
+    """
+
+    def __init__(self, addr, tls_context, ir_opts, lm_opts):
+        self.ir_opts = ir_opts
+        self.lm_opts = lm_opts
+        self.loader = make_completor_loader(self.lm_opts)
+        self.server = Server(addr, self.make_protocol, tls_context)
+
+    def make_protocol(self, *args, **kwargs):
+        return CompletionProtocol(self.loader, *args, **kwargs)
+
+    def run(self):
+        return self.server.start()

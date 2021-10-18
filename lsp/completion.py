@@ -1,6 +1,7 @@
 #   encoding: utf8
 #   filename: completion.py
 
+import logging
 import re
 
 import numpy as np
@@ -13,6 +14,12 @@ from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
 from tensorflow.keras.models import load_model
 
 from .corpus import Document
+
+
+__all__ = (
+    'AbstractCompletor',
+    'make_completor_loader',
+)
 
 
 def locate(text: str, line: int, char: int) -> Optional[int]:
@@ -48,13 +55,46 @@ class AbstractCompletor(ABC):
         pass
 
 
-class VocabCompletor(AbstractCompletor):
+class DummyCompletor(AbstractCompletor):
+    """Class DummyCompletor implements a completor model used for testing and
+    as a fallback interally.
+    """
 
-    def __init__(self, vocab: Optional[List[str]] = None):
-        self.vocab = vocab or []
+    def complete(self, doc: Document, line: int, char: int) -> List[str]:
+        return []
+
+
+class VocabCompletor(AbstractCompletor):
+    """Class VocabCompletor implements completion logic based on predefined
+    vocabulary.
+
+    :param vocab: List of words.
+    """
+
+    def __init__(self, vocab: List[str]):
+        self.vocab = vocab
 
     def complete(self, doc: Document, line: int, char: int) -> List[str]:
         return self.vocab
+
+
+class VocabCompletorLoader:
+    """Class VocabCompletorLoader is an loader object which loads from
+    filesystem and initialises completor. This loader class is a caching one.
+
+    :param vocab_path: Path to vocabulary file.
+    """
+
+    def __init__(self, vocab_path):
+        self.completor: AbstractCompletor
+        self.vocab_path = vocab_path
+
+    def load(self) -> AbstractCompletor:
+        if not hasattr(self, 'completor'):
+            with open(self.vocab_path) as fin:
+                vocab = fin.read().splitlines()
+            self.completor = VocabCompletor(vocab)
+        return self.completor
 
 
 class Completor(AbstractCompletor):
@@ -124,15 +164,16 @@ class Completor(AbstractCompletor):
         return Completor(tv, model, **kwargs)
 
 
-def get_completor(*args, **kwargs) -> AbstractCompletor:
-    """Function get_completor implements factory patter for constuction a
-    suitable completor instance.
+def make_completor_loader(lm_opts):
+    """Function make_completor_loader implements factory patter for constuction
+    a suitable completor builder (or loader) type.
     """
-    return VocabCompletor(*args, **kwargs)
+    if (model_type := lm_opts.get('model-type')) is None:
+        logging.info('no model type is specified: assume `vocab` by default')
+        model_type = 'vocab'
 
-
-__all__ = (
-    'AbstractCompletor',
-    'Completor',
-    'VocabCompletor',
-)
+    # TODO: Use `match-case` syntax from Python 3.10.
+    if model_type == 'vocab':
+        return VocabCompletorLoader(lm_opts['vocab_path'])
+    else:
+        raise ValueError(f'Unknown language model type: {model_type}')

@@ -14,8 +14,7 @@ from sys import stderr
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
-from .app import Protocol
-from .syncio import Addr, Dispatcher, Proto, Server
+from .syncio import Addr, Dispatcher, Proto
 from .version import version
 
 
@@ -116,10 +115,27 @@ def connect(addr: Addr):
         logging.error('connecting via unix sockets is not implemented yet')
 
 
-def serve(model: Path, vocab: Path, context_size: int, num_results: int,
+def serve(context_size: int, model: Path, model_type: str, vocab: Path,
+          num_results: int,
           addr: Addr, host: str, port: int,
           tls_cert: Optional[Path], tls_key: Optional[Path],
           tls_pass: Optional[Path]):
+    # Resolve address components.
+    addr.update(host=host, port=port)
+
+    # Combine all ranking (IR) related options together.
+    ir_opts = {
+        'num_results': num_results,
+    }
+
+    # Combine all language model related options together.
+    lm_opts = {
+        'context_size': context_size,
+        'model_type': model_type,
+        'model_path': model,
+        'vocab_path': vocab,
+    }
+
     # Create TLS context if posssible.
     if tls_cert is None:
         tls_context = None
@@ -130,14 +146,10 @@ def serve(model: Path, vocab: Path, context_size: int, num_results: int,
                                     keyfile=tls_key,
                                     password=make_password_reader(tls_pass))
 
-    addr.update(host=host, port=port)
-
-    # TODO: Collect all options to a container and construct closed factory for
-    # serving.
-    protocol = Protocol
-
-    server = Server(addr, protocol, tls_context)
-    server.start()
+    # Load lazily application controller and run application in blocking mode.
+    from .app import Application
+    app = Application(addr, tls_context, ir_opts, lm_opts)
+    app.run()
 
 
 def help_():
@@ -199,6 +211,7 @@ parser_help.set_defaults(func=help_)
 parser_serve = subparsers.add_parser('serve', parents=[parser_opt_connection], help='Run language server.')  # noqa: E501
 parser_serve.set_defaults(func=serve)
 parser_serve.add_argument('-c', '--context-size', default=3, type=int, help='Size of context used to make predictions.')  # noqa: E501
+parser_serve.add_argument('-m', '--model-type', type=str, help='Type of language model to use.')  # noqa: E501
 parser_serve.add_argument('-n', '--num-results', default=10, type=int, help='Number of completion items in response.')  # noqa: E501
 parser_serve.add_argument('-M', '--model', type=PathType(True, not_file=True), help='Path to model file or directory.')  # noqa: E501
 parser_serve.add_argument('-V', '--vocab', type=PathType(True, not_dir=True), help='Path to vocabulary file.')  # noqa: E501
