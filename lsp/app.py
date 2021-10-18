@@ -3,6 +3,8 @@
 
 import logging
 
+from io import StringIO
+from json import dump
 from os import getppid
 from string import ascii_letters
 
@@ -16,6 +18,49 @@ from .version import version
 __all__ = (
     'Application',
 )
+
+
+def format_initialize_params(params):
+    sio = StringIO()
+    print('Parent PID:            ', params.get('processId'), file=sio)
+    if (info := params.get('clientInfo', {})):
+        name = info.get('name', '')
+        version = info.get('version')
+        value = f'{name}/{version}' if version else name
+        print('Client info:           ', value, file=sio)
+    print('Locale:                ', params.get('locale', ''), file=sio)
+    rootPath = params.get('rootPath')
+    rootUri = params.get('rootUri', rootPath)
+    print('Root URI:              ', rootUri, file=sio)
+    folders = params.get('WorkspaceFolder', [])
+    print('Workspace Folders:', file=sio)
+    for i, folder in enumerate(folders, 1):
+        uri = folder.get('uri')
+        name = folder.get('name')
+        print(f'[{i}:2d] {name} -> {uri}', file=sio)
+    print('Initialization Options:', end=' ', file=sio)
+    if (opts := params.get('initializationOptions')) is None:
+        print(file=sio)
+    else:
+        dump(opts, sio)
+        print(file=sio)
+    tracing = params.get('trace', 'off')
+    print('Tracing:               ', tracing, file=sio)
+    print('Client Capabilities:', file=sio)
+    caps = params.get('capabilities', {})
+    print('[General]', end=' ', file=sio)
+    dump(caps.get('general'), sio)
+    print(file=sio)
+    print('[Document]', end=' ', file=sio)
+    dump(caps.get('textDocument'), sio)
+    print(file=sio)
+    print('[Workspace]', end=' ', file=sio)
+    dump(caps.get('workspace'), sio)
+    print(file=sio)
+    print('[Experimental]', end=' ', file=sio)
+    dump(caps.get('experimental'), sio)
+    print(file=sio)
+    return sio.getvalue()
 
 
 class CompletionProtocol(LanguageServerProtocol):
@@ -36,6 +81,8 @@ class CompletionProtocol(LanguageServerProtocol):
 
     def initialize(self, params):
         logging.info('handle initialize() procedure call')
+        logging.info('human-readable initialize params are below\n%s',
+                     format_initialize_params(params))
 
         logging.info('instantiate corpus manager')
         self.corpus = Corpus()
