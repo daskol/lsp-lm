@@ -63,6 +63,18 @@ openssl rsa -in key.pem -passin file:password.txt -check -noout
 # RSA key ok
 ```
 
+## Development with Docker
+
+In order to develop on different platforms we uses custom docker image for
+non-priviledge user based on Nvidia CUDA image. Image is parametrized by user
+name and user ID in a host system. The latter is crucial thing in binding host
+volumes.
+
+```bash
+docker build -t lsp-lm --build-arg UID=$(id -u) .
+docker run --rm -ti -e TERM=$TERM -v $(pwd):/workspace lsp-lm
+```
+
 ## Tasks Queue
 
 1. Find suitable corpus in Russian (English).
