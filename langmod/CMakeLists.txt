@@ -1,2 +1,0 @@
-add_subdirectory(mediawiki)
-add_subdirectory(mediawiki2parquet)
