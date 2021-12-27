@@ -1,0 +1,11 @@
+measure,text
+341 ms ± 20.9 ms,TF
+220 ms ± 2.58 ms,TF + JIT
+147 ms ± 4.89 ms,PyTorch
+126 ms ± .639 µs,ONNX Default (11)
+360 ms ± 41.5 ms,ONNX oneDNN (11 -O1)
+233 ms ± 6.59 ms,ONNX Default (11 -O1 -fp16)
+293 ms ± 4.70 ms,ONNX oneDNN (11 -O1 -fp16)
+807 ms ± 18.9 ms,ONNX oneDNN (11)
+126 ms ± 1.04 ms,ONNX Default (12)
+698 ms ± 6.94 ms,ONNX oneDNN (12)
