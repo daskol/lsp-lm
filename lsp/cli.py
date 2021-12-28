@@ -18,6 +18,8 @@ from .lsp import Addr, Proto
 from .lsp.syncio import Dispatcher
 from .version import version
 
+__all__ = ('main', )
+
 
 LOG_LEVELS = {
     'debug': logging.DEBUG,
@@ -117,8 +119,7 @@ def connect(addr: Addr):
 
 
 def serve(context_size: int, model: Path, model_type: str, vocab: Path,
-          num_results: int,
-          addr: Addr, host: str, port: int,
+          num_results: int, hf_model: str, addr: Addr, host: str, port: int,
           tls_cert: Optional[Path], tls_key: Optional[Path],
           tls_pass: Optional[Path]):
     # Resolve address components.
@@ -132,8 +133,9 @@ def serve(context_size: int, model: Path, model_type: str, vocab: Path,
     # Combine all language model related options together.
     lm_opts = {
         'context_size': context_size,
-        'model_type': model_type,
         'model_path': model,
+        'model_type': model_type,
+        'num_results': num_results,
         'vocab_path': vocab,
     }
 
@@ -212,17 +214,14 @@ parser_help.set_defaults(func=help_)
 parser_serve = subparsers.add_parser('serve', parents=[parser_opt_connection], help='Run language server.')  # noqa: E501
 parser_serve.set_defaults(func=serve)
 parser_serve.add_argument('-c', '--context-size', default=3, type=int, help='Size of context used to make predictions.')  # noqa: E501
-parser_serve.add_argument('-m', '--model-type', type=str, help='Type of language model to use.')  # noqa: E501
+parser_serve.add_argument('-m', '--model-type', type=str, help='Type of language model to use (e.g. hf or vocab).')  # noqa: E501
 parser_serve.add_argument('-n', '--num-results', default=10, type=int, help='Number of completion items in response.')  # noqa: E501
 parser_serve.add_argument('-M', '--model', type=PathType(True, not_file=True), help='Path to model file or directory.')  # noqa: E501
 parser_serve.add_argument('-V', '--vocab', type=PathType(True, not_dir=True), help='Path to vocabulary file.')  # noqa: E501
+parser_serve.add_argument('--hf-model', type=str, help='HuggingFace model.')
 parser_serve.add_argument('--tls-cert', type=PathType(True, not_dir=True), help='Path to TLS certificate.')  # noqa: E501
 parser_serve.add_argument('--tls-key', type=PathType(True, not_dir=True), help='Path to private key.')  # noqa: E501
 parser_serve.add_argument('--tls-pass', type=PathType(True, not_dir=True), help='Path to password to decrypt private key.')  # noqa: E501
 
 parser_version = subparsers.add_parser('version', add_help=False, help='Show version information.')  # noqa: E501
 parser_version.set_defaults(func=version_)
-
-__all__ = (
-    'main',
-)
