@@ -7,8 +7,8 @@
 ### Features
 
 - [x] Completion (context-aware continuation sudgestions).
-- [ ] Diagnostics (spelling, grammar, etc).
-- [ ] Go to Definition (aka thesaurus for natural languages).
+- [ ] Diagnostics (spelling, grammar, code correctness, etc).
+- [ ] Go to Definition (aka thesaurus for natural languages or symbol definition for programming languages).
 
 ## Usage
 
@@ -20,6 +20,11 @@ lsp-lm serve  # stdio:
 ```
 With the command above one starts a language server to communicate over standard
 I/O streams.
+
+In order to serve pretrained HuggingFace model (e.g. CodeBERT base for MLM) one can run the following. We assume that model config and model weights in the same directory.
+```shell
+python -m lsp serve -m hf -M .../huggingface.co/microsoft/codebert-base-mlm tcp://127.0.0.1:5272
+```
 
 ### IPC
 
